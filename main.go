@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type Endpoint struct {
@@ -19,14 +22,38 @@ type Endpoint struct {
 }
 
 type Route struct {
-	Name      string     `json:"name"`
-	Path      string     `json:"path"`
-	Endpoints []Endpoint `json:"endpoints"`
+	Name      string              `json:"name"`
+	Path      string              `json:"path"`
+	Endpoints map[string]Endpoint `json:"endpoints"`
 }
 
 type Apy struct {
 	App   *gin.Engine
 	Route Route
+}
+
+func CreateJwtToken() (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"nbf": time.After(15 * time.Minute),
+	})
+	tokenString, err := token.SignedString([]byte("netdata.io"))
+	return tokenString, err
+}
+
+func ValidJwtToken(tokenString string) error {
+	if tokenString == "" {
+		return errors.New("There is no token")
+	}
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte("AllYourBase"), nil
+	})
+
+	if token.Valid {
+		return nil
+	} else if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
+		return errors.New("Expired Token")
+	}
+	return errors.New("Couldn't handle this token")
 }
 
 // func MiddleWare() gin.HandlerFunc {
@@ -38,12 +65,11 @@ type Apy struct {
 // 	}
 // }
 
-func (a *Apy) AddEndpoint(e Endpoint) *Apy {
-	a.Route.Endpoints = append(a.Route.Endpoints, e)
-	return a
+func (a *Apy) AddEndpoint(e Endpoint) {
+	a.Route.Endpoints[e.Name] = e
 }
 
-func fetch(url string, method string, c *gin.Context) (string, error) {
+func Fetch(url string, method string, c *gin.Context) (string, error) {
 	var (
 		res *http.Response
 		err error
@@ -72,17 +98,24 @@ func fetch(url string, method string, c *gin.Context) (string, error) {
 	return string(body), nil
 }
 
-func (a *Apy) getUrl(e *Endpoint) string {
+func (a *Apy) GetUrl(e *Endpoint) string {
 	return a.Route.Path + e.Path
 }
 
 func (a *Apy) Run() {
 	// a.App.Use(MiddleWare())
 	for i, endpoint := range a.Route.Endpoints {
+
 		a.App.Handle(endpoint.Method, endpoint.Path, func(c *gin.Context) {
-
 			if endpoint.EnableAuth {
-
+				token := c.Request.Header.Get("Authorization")
+				err := ValidJwtToken(token)
+				if err != nil {
+					c.JSON(http.StatusUnauthorized, gin.H{
+						"error": err.Error(),
+					})
+					return
+				}
 			}
 
 			if endpoint.EnableCache {
@@ -96,14 +129,14 @@ func (a *Apy) Run() {
 				return
 			}
 
-			res, err := fetch(a.getUrl(&endpoint), endpoint.Method, c)
+			res, err := Fetch(a.GetUrl(&endpoint), endpoint.Method, c)
 
 			if err == nil {
 				c.JSON(http.StatusOK, gin.H{
 					"message": res,
 				})
 
-				a.Route.Endpoints[i].incReqCounter()
+				// a.Route.Endpoints[i].IncReqCounter()
 			}
 
 		})
@@ -111,7 +144,7 @@ func (a *Apy) Run() {
 	a.App.Run()
 }
 
-func (e *Endpoint) incReqCounter() {
+func (e *Endpoint) IncReqCounter() {
 	e.Requests++
 }
 
@@ -119,12 +152,11 @@ func main() {
 	route := Route{Name: "Api", Path: "https://reqres.in"}
 	apy := Apy{App: gin.Default(), Route: route}
 
-	apy.AddEndpoint(Endpoint{Name: "getUsers", Path: "/api/users", Method: http.MethodGet, EnableCache: true})
-	apy.AddEndpoint(Endpoint{Name: "createUsers", Path: "/api/users", Method: http.MethodPost, RateLimit: 2})
+	apy.AddEndpoint(Endpoint{Name: "getUsers", Path: "/api/users", Method: http.MethodGet, EnableAuth: false})
+	apy.AddEndpoint(Endpoint{Name: "createUsers", Path: "/api/users", Method: http.MethodPost, RateLimit: 2, EnableAuth: true})
+
+	CreateJwtToken()
 
 	apy.Run()
 
-	// api1 := apy.AddRoute("www.apy.com")
-	// api1.AddEndpoint("/users",{cache = false, })
-	//
 }
