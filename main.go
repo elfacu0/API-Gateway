@@ -148,7 +148,7 @@ func (e *Endpoint) IncReqCounter() {
 }
 
 func (a *Apy) Init(path string) {
-	route := Route{Name: "Api", Path: path}
+	route := Route{Name: "Api", Path: path, Endpoints: make(map[string]Endpoint)}
 	a.App = gin.Default()
 	a.Route = route
 	// a.App.Use(MiddleWare())
