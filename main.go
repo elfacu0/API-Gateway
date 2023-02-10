@@ -103,7 +103,6 @@ func (a *Apy) GetUrl(e *Endpoint) string {
 }
 
 func (a *Apy) Run() {
-	// a.App.Use(MiddleWare())
 	for i, endpoint := range a.Route.Endpoints {
 
 		a.App.Handle(endpoint.Method, endpoint.Path, func(c *gin.Context) {
@@ -148,9 +147,16 @@ func (e *Endpoint) IncReqCounter() {
 	e.Requests++
 }
 
+func (a *Apy) Init(path string) {
+	route := Route{Name: "Api", Path: path}
+	a.App = gin.Default()
+	a.Route = route
+	// a.App.Use(MiddleWare())
+}
+
 func main() {
-	route := Route{Name: "Api", Path: "https://reqres.in"}
-	apy := Apy{App: gin.Default(), Route: route}
+	apy := Apy{}
+	apy.Init("https://reqres.in")
 
 	apy.AddEndpoint(Endpoint{Name: "getUsers", Path: "/api/users", Method: http.MethodGet, EnableAuth: false})
 	apy.AddEndpoint(Endpoint{Name: "createUsers", Path: "/api/users", Method: http.MethodPost, RateLimit: 2, EnableAuth: true})
