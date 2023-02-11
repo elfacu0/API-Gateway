@@ -15,5 +15,4 @@ func main() {
 	app.EnableMetrics()
 
 	app.Run()
-
 }
