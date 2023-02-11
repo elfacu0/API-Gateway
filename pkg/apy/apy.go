@@ -2,6 +2,8 @@ package apy
 
 import (
 	"gateway/pkg/auth"
+	"gateway/pkg/storage"
+	"gateway/utils"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -71,7 +73,8 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		method := c.Request.Method
-		endpoint, ok := endpoints[path+method]
+		id := utils.ID(path, method)
+		endpoint, ok := endpoints[id]
 
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -104,7 +107,8 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 }
 
 func (a *Apy) AddEndpoint(e Endpoint) {
-	a.Route.Endpoints[e.Path+e.Method] = &e
+	id := utils.ID(e.Path, e.Method)
+	a.Route.Endpoints[id] = &e
 	a.App.Handle(e.Method, e.Path, func(c *gin.Context) {
 		if _, ok := c.MustGet("ok").(bool); !ok {
 			return
@@ -122,9 +126,10 @@ func (a *Apy) AddEndpoint(e Endpoint) {
 
 func (a *Apy) Fetch(c *gin.Context) (string, error) {
 	method, path := c.Request.Method, c.Request.URL.Path
+	id := utils.ID(path, method)
 	url := a.GetUrl(path)
 
-	endpoint := a.Route.Endpoints[path+method]
+	endpoint := a.Route.Endpoints[id]
 
 	if endpoint.EnableCache && endpoint.Cache != "" {
 		return endpoint.Cache, nil
@@ -178,6 +183,8 @@ func (a *Apy) Run() {
 
 func (e *Endpoint) SetCache(body string) {
 	e.Cache = body
+	id := utils.ID(e.Path, e.Method)
+	storage.Save(id, body)
 }
 
 func (e *Endpoint) ResetRequest() {
