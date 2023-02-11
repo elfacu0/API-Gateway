@@ -59,6 +59,14 @@ func HandleRateLimit(endpoint *Endpoint) ResError {
 	return ResError{}
 }
 
+func HandleAuth(endpoint *Endpoint, token string) ResError {
+	if endpoint.EnableAuth {
+		err := auth.ValidJwtToken(token)
+		return ResError{Status: http.StatusUnauthorized, Message: err.Error()}
+	}
+	return ResError{}
+}
+
 func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -79,15 +87,12 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 			return
 		}
 
-		if endpoint.EnableAuth {
-			token := strings.Split(c.Request.Header.Get("Authorization"), " ")[1]
-			err := auth.ValidJwtToken(token)
-			if err != nil {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"error": err.Error(),
-				})
-				return
-			}
+		token := strings.Split(c.Request.Header.Get("Authorization"), " ")[1]
+		if err := HandleAuth(endpoint, token); err.Status != 0 {
+			c.JSON(err.Status, gin.H{
+				"error": err.Message,
+			})
+			return
 		}
 
 		c.Set("ok", false)
