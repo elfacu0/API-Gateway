@@ -10,6 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type ResError struct {
+	Status  int
+	Message string
+}
+
 type Metric struct {
 	Path     string `json:"path"`
 	Method   string `json:"method"`
@@ -42,6 +47,18 @@ type Apy struct {
 
 const RATE_LIMIT_DURATION = 15 * 60 * 60
 
+func HandleRateLimit(endpoint *Endpoint) ResError {
+	if endpoint.RateLimit > 0 && (endpoint.LastTime+RATE_LIMIT_DURATION) < int(time.Now().Unix()) {
+		endpoint.ResetRequest()
+	}
+
+	if endpoint.RateLimit > 0 && endpoint.Requests >= endpoint.RateLimit {
+		return ResError{Status: http.StatusTooManyRequests, Message: "Too many Request"}
+	}
+
+	return ResError{}
+}
+
 func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -52,19 +69,13 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Endpoint not found",
 			})
-			c.Set("error", true)
 			return
 		}
 
-		if endpoint.RateLimit > 0 && (endpoint.LastTime+RATE_LIMIT_DURATION) < int(time.Now().Unix()) {
-			endpoint.ResetRequest()
-		}
-
-		if endpoint.RateLimit > 0 && endpoint.Requests >= endpoint.RateLimit {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Too many Request",
+		if err := HandleRateLimit(endpoint); err.Status != 0 {
+			c.JSON(err.Status, gin.H{
+				"error": err.Message,
 			})
-			c.Set("error", true)
 			return
 		}
 
@@ -75,12 +86,11 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"error": err.Error(),
 				})
-				c.Set("error", true)
 				return
 			}
 		}
 
-		c.Set("error", false)
+		c.Set("ok", false)
 
 		c.Next()
 
@@ -91,7 +101,7 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 func (a *Apy) AddEndpoint(e Endpoint) {
 	a.Route.Endpoints[e.Path+e.Method] = &e
 	a.App.Handle(e.Method, e.Path, func(c *gin.Context) {
-		if err := c.MustGet("error").(bool); err == true {
+		if _, ok := c.MustGet("ok").(bool); !ok {
 			return
 		}
 
