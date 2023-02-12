@@ -129,8 +129,11 @@ func (a *Apy) Fetch(c *gin.Context) (string, error) {
 
 	endpoint := a.Route.Endpoints[id]
 
-	if endpoint.EnableCache && endpoint.Cache != "" {
-		return endpoint.Cache, nil
+	if endpoint.EnableCache {
+		endpoint.LoadCache()
+		if endpoint.Cache != "" {
+			return endpoint.Cache, nil
+		}
 	}
 
 	var (
@@ -177,6 +180,14 @@ func (a *Apy) Run() {
 		c.JSON(200, token)
 	})
 	a.App.Run()
+}
+
+func (e *Endpoint) LoadCache() {
+	id := utils.ID(e.Path, e.Method)
+	cache, err := storage.Load(id)
+	if err == nil {
+		e.Cache = cache
+	}
 }
 
 func (e *Endpoint) SetCache(body string) {
