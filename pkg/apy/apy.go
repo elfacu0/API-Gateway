@@ -6,6 +6,7 @@ import (
 	"gateway/utils"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,15 +26,16 @@ type Metric struct {
 
 // RateLimit affects all request and not only request from one IP
 type Endpoint struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	Cache       string `json:"cache"`
-	EnableCache bool   `json:"enable-cache"`
-	EnableAuth  bool   `json:"enable-auth"`
-	RateLimit   int    `json:"rate-limit"`
-	LastTime    int    `json:"last-time"`
-	Requests    int    `json:"requests"`
+	Name          string `json:"name"`
+	Path          string `json:"path"`
+	Method        string `json:"method"`
+	Cache         string `json:"cache"`
+	EnableCache   bool   `json:"enable-cache"`
+	EnableAuth    bool   `json:"enable-auth"`
+	RateLimit     int    `json:"rate-limit"`
+	LastTime      int    `json:"last-time"`
+	Requests      int    `json:"requests"`
+	TotalRequests int    `json:"total-requests"`
 }
 
 type Route struct {
@@ -109,6 +111,8 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 func (a *Apy) AddEndpoint(e Endpoint) {
 	id := utils.ID(e.Path, e.Method)
 	a.Route.Endpoints[id] = &e
+	e.LoadCache()
+	e.LoadTotalRequests()
 	a.App.Handle(e.Method, e.Path, func(c *gin.Context) {
 		if _, ok := c.Get("ok"); !ok {
 			return
@@ -129,11 +133,8 @@ func (a *Apy) Fetch(c *gin.Context) (string, error) {
 
 	endpoint := a.Route.Endpoints[id]
 
-	if endpoint.EnableCache {
-		endpoint.LoadCache()
-		if endpoint.Cache != "" {
-			return endpoint.Cache, nil
-		}
+	if endpoint.EnableCache && endpoint.Cache != "" {
+		return endpoint.Cache, nil
 	}
 
 	var (
@@ -183,7 +184,7 @@ func (a *Apy) Run() {
 }
 
 func (e *Endpoint) LoadCache() {
-	id := utils.ID(e.Path, e.Method)
+	id := utils.IdCache(e.Path, e.Method)
 	cache, err := storage.Load(id)
 	if err == nil {
 		e.Cache = cache
@@ -192,8 +193,23 @@ func (e *Endpoint) LoadCache() {
 
 func (e *Endpoint) SetCache(body string) {
 	e.Cache = body
-	id := utils.ID(e.Path, e.Method)
+	id := utils.IdCache(e.Path, e.Method)
 	storage.Save(id, body)
+}
+
+func (e *Endpoint) LoadTotalRequests() {
+	id := utils.IdRquests(e.Path, e.Method)
+	val, err := storage.Load(id)
+	if err == nil {
+		if val, err := strconv.Atoi(val); err == nil {
+			e.TotalRequests = val
+		}
+	}
+}
+
+func (e *Endpoint) SaveTotalRequests() {
+	id := utils.IdRquests(e.Path, e.Method)
+	storage.Save(id, strconv.Itoa(e.TotalRequests))
 }
 
 func (e *Endpoint) ResetRequest() {
@@ -203,13 +219,15 @@ func (e *Endpoint) ResetRequest() {
 
 func (e *Endpoint) IncReqCounter() {
 	e.Requests++
+	e.TotalRequests++
+	e.SaveTotalRequests()
 }
 
 func (a *Apy) EnableMetrics() {
 	a.App.GET("/metrics", func(c *gin.Context) {
 		metrics := make(map[string]Metric)
 		for _, endpoint := range a.Route.Endpoints {
-			metrics[endpoint.Name] = Metric{Path: endpoint.Path, Method: endpoint.Method, Requests: endpoint.Requests}
+			metrics[endpoint.Name] = Metric{Path: endpoint.Path, Method: endpoint.Method, Requests: endpoint.TotalRequests}
 		}
 		c.JSON(200, metrics)
 	})
