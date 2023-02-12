@@ -29,3 +29,11 @@ func Load(key string) (string, error) {
 	}
 	return val, nil
 }
+
+func Keys() ([]string, error) {
+	keys, err := rdb.Keys(ctx, "*").Result()
+	if err != nil {
+		return keys, err
+	}
+	return keys, nil
+}
