@@ -21,6 +21,7 @@ type ResError struct {
 
 type Metric struct {
 	Url      string `json:"url"`
+	Path     string `json:"path"`
 	Method   string `json:"method"`
 	Requests int    `json:"requests"`
 }
@@ -230,7 +231,7 @@ func (a *Apy) EnableMetrics() {
 	a.App.GET("/metrics", func(c *gin.Context) {
 		metrics := make(map[string]Metric)
 		for _, endpoint := range a.Endpoints {
-			metrics[endpoint.Name] = Metric{Url: endpoint.Url, Method: endpoint.Method, Requests: endpoint.TotalRequests}
+			metrics[endpoint.Name] = Metric{Url: endpoint.Url, Path: endpoint.Path, Method: endpoint.Method, Requests: endpoint.TotalRequests}
 		}
 		c.JSON(200, metrics)
 	})
