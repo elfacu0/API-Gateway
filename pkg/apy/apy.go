@@ -2,7 +2,6 @@ package apy
 
 import (
 	"encoding/json"
-	"fmt"
 	"gateway/pkg/auth"
 	"gateway/pkg/storage"
 	"gateway/utils"
@@ -21,7 +20,7 @@ type ResError struct {
 }
 
 type Metric struct {
-	Path     string `json:"path"`
+	Url      string `json:"url"`
 	Method   string `json:"method"`
 	Requests int    `json:"requests"`
 }
@@ -30,6 +29,7 @@ type Metric struct {
 type Endpoint struct {
 	Name          string `json:"name"`
 	Path          string `json:"path"`
+	Url           string `json:"url"`
 	Method        string `json:"method"`
 	Cache         string `json:"cache"`
 	EnableCache   bool   `json:"enable-cache"`
@@ -40,15 +40,9 @@ type Endpoint struct {
 	TotalRequests int    `json:"total-requests"`
 }
 
-type Route struct {
-	Name      string               `json:"name"`
-	Path      string               `json:"path"`
-	Endpoints map[string]*Endpoint `json:"endpoints"`
-}
-
 type Apy struct {
-	App   *gin.Engine
-	Route Route
+	App       *gin.Engine
+	Endpoints map[string]*Endpoint `json:"endpoints"`
 }
 
 const RATE_LIMIT_DURATION = 15 * 60 * 60
@@ -78,6 +72,7 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		method := c.Request.Method
 		id := utils.ID(path, method)
+
 		endpoint, ok := endpoints[id]
 
 		if !ok {
@@ -112,7 +107,7 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 
 func (a *Apy) AddEndpoint(e Endpoint) {
 	id := utils.ID(e.Path, e.Method)
-	a.Route.Endpoints[id] = &e
+	a.Endpoints[id] = &e
 	a.App.Handle(e.Method, e.Path, func(c *gin.Context) {
 		if _, ok := c.Get("ok"); !ok {
 			return
@@ -126,14 +121,15 @@ func (a *Apy) AddEndpoint(e Endpoint) {
 	})
 }
 
-func (a *Apy) SaveEndpoint(e Endpoint) {
+func SaveEndpoint(e Endpoint) {
 	b, err := json.Marshal(e)
 	if err != nil {
 		return
 	}
 
 	jsonEndpoint := string(b)
-	storage.Save(utils.ID(e.Path, e.Method), jsonEndpoint)
+	id := utils.ID(e.Path, e.Method)
+	storage.Save(id, jsonEndpoint)
 }
 
 func (a *Apy) LoadEnpoints() {
@@ -142,18 +138,16 @@ func (a *Apy) LoadEnpoints() {
 		return
 	}
 	for _, key := range keys {
-		fmt.Println("acata", key)
 		var endpoint Endpoint
 		jsonData, err := storage.Load(key)
 		if err != nil {
 			return
 		}
 		err = json.Unmarshal([]byte(jsonData), &endpoint)
-
 		if err != nil {
-			return
+			continue
 		}
-		if endpoint.Path != "" {
+		if endpoint.Url != "" {
 			a.AddEndpoint(endpoint)
 		}
 	}
@@ -162,9 +156,9 @@ func (a *Apy) LoadEnpoints() {
 func (a *Apy) Fetch(c *gin.Context) (string, error) {
 	method, path := c.Request.Method, c.Request.URL.Path
 	id := utils.ID(path, method)
-	url := a.GetUrl(path)
+	endpoint := a.Endpoints[id]
 
-	endpoint := a.Route.Endpoints[id]
+	url := endpoint.GetUrl()
 
 	if endpoint.EnableCache && endpoint.Cache != "" {
 		return endpoint.Cache, nil
@@ -201,19 +195,13 @@ func (a *Apy) Fetch(c *gin.Context) (string, error) {
 	return string(body), nil
 }
 
-func (a *Apy) GetUrl(path string) string {
-	return a.Route.Path + path
+func (e *Endpoint) GetUrl() string {
+	return e.Url
 }
 
 func (e *Endpoint) SetCache(body string) {
 	e.Cache = body
-	id := utils.IdCache(e.Path, e.Method)
-	storage.Save(id, body)
-}
-
-func (e *Endpoint) SaveTotalRequests() {
-	id := utils.IdRquests(e.Path, e.Method)
-	storage.Save(id, strconv.Itoa(e.TotalRequests))
+	SaveEndpoint(*e)
 }
 
 func (e *Endpoint) ResetRequest() {
@@ -224,7 +212,7 @@ func (e *Endpoint) ResetRequest() {
 func (e *Endpoint) IncReqCounter() {
 	e.Requests++
 	e.TotalRequests++
-	e.SaveTotalRequests()
+	SaveEndpoint(*e)
 }
 
 func (a *Apy) Run() {
@@ -241,8 +229,8 @@ func (a *Apy) Run() {
 func (a *Apy) EnableMetrics() {
 	a.App.GET("/metrics", func(c *gin.Context) {
 		metrics := make(map[string]Metric)
-		for _, endpoint := range a.Route.Endpoints {
-			metrics[endpoint.Name] = Metric{Path: endpoint.Path, Method: endpoint.Method, Requests: endpoint.TotalRequests}
+		for _, endpoint := range a.Endpoints {
+			metrics[endpoint.Name] = Metric{Url: endpoint.Url, Method: endpoint.Method, Requests: endpoint.TotalRequests}
 		}
 		c.JSON(200, metrics)
 	})
@@ -251,22 +239,27 @@ func (a *Apy) EnableMetrics() {
 func (a *Apy) EnableNewEndpoints() {
 	a.App.POST("/add", func(c *gin.Context) {
 		name := c.PostForm("name")
-		path := c.PostForm("path")
+		url := c.PostForm("url")
 		method := c.PostForm("method")
 		rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
 		enableCache := c.PostForm("enable-cache") != ""
 		enableAuth := c.PostForm("enable-auth") != ""
-		endpoint := Endpoint{Name: name, Path: path, Method: method, RateLimit: rateLimit, EnableCache: enableCache, EnableAuth: enableAuth}
+		path := "/" + utils.RandomStr()
+		endpoint := Endpoint{Name: name, Path: path, Url: url, Method: method, RateLimit: rateLimit, EnableCache: enableCache, EnableAuth: enableAuth}
 		a.AddEndpoint(endpoint)
-		a.SaveEndpoint(endpoint)
+		SaveEndpoint(endpoint)
+
+		c.JSON(http.StatusCreated, gin.H{
+			"Message": "Endpoint Created Successfully",
+			"Path":    path,
+		})
 	})
 }
 
 func (a *Apy) Init(path string) {
-	route := Route{Name: "Api", Path: path, Endpoints: make(map[string]*Endpoint)}
 	a.App = gin.Default()
-	a.Route = route
+	a.Endpoints = make(map[string]*Endpoint)
 	a.EnableNewEndpoints()
-	a.App.Use(MiddleWare(a.Route.Endpoints))
+	a.App.Use(MiddleWare(a.Endpoints))
 	a.LoadEnpoints()
 }
