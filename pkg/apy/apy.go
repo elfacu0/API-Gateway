@@ -110,13 +110,11 @@ func (a *Apy) AddEndpoint(e Endpoint) {
 	id := utils.ID(e.Path, e.Method)
 	a.Route.Endpoints[id] = &e
 	a.App.Handle(e.Method, e.Path, func(c *gin.Context) {
-		if _, ok := c.MustGet("ok").(bool); !ok {
+		if _, ok := c.Get("ok"); !ok {
 			return
 		}
 
-		res, err := a.Fetch(c)
-
-		if err == nil {
+		if res, err := a.Fetch(c); err == nil {
 			c.JSON(http.StatusOK, gin.H{
 				"body": res,
 			})
