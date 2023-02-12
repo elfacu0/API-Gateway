@@ -3,16 +3,18 @@ package storage
 import (
 	"context"
 
+	"os"
+
 	"github.com/redis/go-redis/v9"
 )
 
 var ctx = context.Background()
 
 var rdb = redis.NewClient(&redis.Options{
-	Addr:     "127.0.0.1:6370",
-	Username: "pepe",
-	Password: "pepe", // no password set
-	DB:       0,      // use default DB
+	Addr:     os.Getenv("DB_HOST") + os.Getenv("DB_PORT"),
+	Username: os.Getenv("DB_USER"),
+	Password: os.Getenv("DB_PASSWORD"),
+	DB:       0, // use default DB
 })
 
 func Save(key, value string) error {
