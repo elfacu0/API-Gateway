@@ -138,6 +138,7 @@ func (a *Apy) LoadEnpoints() {
 	if err != nil {
 		return
 	}
+
 	for _, key := range keys {
 		var endpoint Endpoint
 		jsonData, err := storage.Load(key)
@@ -260,7 +261,5 @@ func (a *Apy) EnableNewEndpoints() {
 func (a *Apy) Init(path string) {
 	a.App = gin.Default()
 	a.Endpoints = make(map[string]*Endpoint)
-	a.EnableNewEndpoints()
 	a.App.Use(MiddleWare(a.Endpoints))
-	a.LoadEnpoints()
 }
