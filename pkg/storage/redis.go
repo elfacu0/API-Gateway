@@ -2,12 +2,15 @@ package storage
 
 import (
 	"context"
+	"fmt"
 
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
+var _ = godotenv.Load()
 var ctx = context.Background()
 
 var rdb = redis.NewClient(&redis.Options{
@@ -24,6 +27,7 @@ func Save(key, value string) error {
 
 func Load(key string) (string, error) {
 	val, err := rdb.Get(ctx, key).Result()
+	fmt.Println(rdb)
 	if err != nil {
 		return "", err
 	}
