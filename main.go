@@ -11,6 +11,7 @@ func main() {
 	app.EnableNewEndpoints()
 	app.EnableMetrics()
 	app.LoadEnpoints()
+	app.EnableDelEndpoints()
 
 	app.Run()
 }
