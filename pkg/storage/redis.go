@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"fmt"
 
 	"os"
 
@@ -27,7 +26,6 @@ func Save(key, value string) error {
 
 func Load(key string) (string, error) {
 	val, err := rdb.Get(ctx, key).Result()
-	fmt.Println(rdb)
 	if err != nil {
 		return "", err
 	}
