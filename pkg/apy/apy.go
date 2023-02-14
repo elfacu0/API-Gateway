@@ -264,7 +264,7 @@ func (a *Apy) EnableMetrics() {
 
 func (a *Apy) EnableNewEndpoints() {
 	path := "/add"
-	id := utils.ID(path, http.MethodGet)
+	id := utils.ID(path, http.MethodPost)
 	a.Endpoints[id] = &Endpoint{Name: "Add Endpoint", Path: path, Method: http.MethodPost}
 
 	a.App.POST(path, func(c *gin.Context) {
