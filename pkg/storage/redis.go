@@ -34,6 +34,11 @@ func Load(key string) (string, error) {
 	return val, nil
 }
 
+func Delete(key string) error {
+	err := rdb.Del(ctx, key).Err()
+	return err
+}
+
 func Keys() ([]string, error) {
 	keys, err := rdb.Keys(ctx, "*").Result()
 	if err != nil {
