@@ -2,6 +2,7 @@ package apy
 
 import (
 	"encoding/json"
+	"fmt"
 	"gateway/pkg/auth"
 	"gateway/pkg/storage"
 	"gateway/utils"
@@ -90,6 +91,10 @@ func HandleAuth(endpoint *Endpoint, c *gin.Context) ResError {
 func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		if len(strings.Split(path, "/")) > 1 {
+			path = "/" + strings.Split(path, "/")[1]
+		}
+		fmt.Println(path)
 		method := c.Request.Method
 		id := utils.ID(path, method)
 
@@ -173,6 +178,15 @@ func (a *Apy) LoadEnpoints() {
 	}
 }
 
+func (a *Apy) DeleteEndpoint(path, method string) error {
+	id := utils.ID(path, method)
+	if err := storage.Delete(id); err != nil {
+		return err
+	}
+	delete(a.Endpoints, id)
+	return nil
+}
+
 func (a *Apy) Fetch(c *gin.Context) (string, error) {
 	method, path := c.Request.Method, c.Request.URL.Path
 	id := utils.ID(path, method)
@@ -235,6 +249,27 @@ func (e *Endpoint) IncReqCounter() {
 	SaveEndpoint(*e)
 }
 
+func (a *Apy) EnableDelEndpoints() {
+	path := "/delete"
+	id := utils.ID(path, http.MethodDelete)
+	a.Endpoints[id] = &Endpoint{Name: "Delete Endpoint", Path: path, Method: http.MethodDelete}
+
+	a.App.DELETE("/delete/:method", func(c *gin.Context) {
+		path := c.Param("path")
+		method := c.Request.Method
+		if err := a.DeleteEndpoint(path, method); err != nil {
+			c.JSON(http.StatusTeapot, gin.H{
+				"error": "Failed to Delete endpoint",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Endpoint Deleted Successfully",
+			"path":    path,
+		})
+	})
+}
+
 func (a *Apy) EnableAuthEndpoint() {
 	path := "/auth"
 	id := utils.ID(path, http.MethodGet)
@@ -245,7 +280,7 @@ func (a *Apy) EnableAuthEndpoint() {
 		if err != nil {
 			return
 		}
-		c.JSON(200, token)
+		c.JSON(http.StatusOK, token)
 	})
 }
 
@@ -269,8 +304,8 @@ func (a *Apy) EnableMetrics() {
 }
 
 func ParseForm(c *gin.Context) (Endpoint, FormErrors) {
-	name := c.PostForm("name")
 	errors := FormErrors{}
+	name := c.PostForm("name")
 	url := c.PostForm("url")
 	method := c.PostForm("method")
 	rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
@@ -310,7 +345,7 @@ func (a *Apy) EnableNewEndpoints() {
 
 		c.JSON(http.StatusCreated, gin.H{
 			"message": "Endpoint Created Successfully",
-			"path":    path,
+			"path":    endpoint.Path,
 		})
 	})
 }
