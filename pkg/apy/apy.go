@@ -14,6 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type FormErrors struct {
+	Name   string
+	Url    string
+	Method string
+}
+
 type ResError struct {
 	Status  int
 	Message string
@@ -262,26 +268,50 @@ func (a *Apy) EnableMetrics() {
 	})
 }
 
+func ParseForm(c *gin.Context) (Endpoint, FormErrors) {
+	name := c.PostForm("name")
+	errors := FormErrors{}
+
+	if name == "" {
+		errors.Name = "Name cannot be empty."
+	}
+
+	url := c.PostForm("url")
+
+	if url == "" {
+		errors.Url = "Url cannot be empty."
+	}
+	method := c.PostForm("method")
+	if method == "" {
+		errors.Method = "Method cannot be empty. "
+	}
+	if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete {
+		errors.Method += "Method not allowed. "
+	}
+	rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
+	enableCache := c.PostForm("enable-cache") != ""
+	enableAuth := c.PostForm("enable-auth") != ""
+	path := "/" + utils.RandomStr()
+	return Endpoint{Name: name, Path: path, Url: url, Method: method, RateLimit: rateLimit, EnableCache: enableCache, EnableAuth: enableAuth}, errors
+}
+
 func (a *Apy) EnableNewEndpoints() {
 	path := "/add"
 	id := utils.ID(path, http.MethodPost)
 	a.Endpoints[id] = &Endpoint{Name: "Add Endpoint", Path: path, Method: http.MethodPost}
 
 	a.App.POST(path, func(c *gin.Context) {
-		name := c.PostForm("name")
-		url := c.PostForm("url")
-		method := c.PostForm("method")
-		rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
-		enableCache := c.PostForm("enable-cache") != ""
-		enableAuth := c.PostForm("enable-auth") != ""
-		path := "/" + utils.RandomStr()
-		endpoint := Endpoint{Name: name, Path: path, Url: url, Method: method, RateLimit: rateLimit, EnableCache: enableCache, EnableAuth: enableAuth}
+		endpoint, errors := ParseForm(c)
+		if errors != (FormErrors{}) {
+			c.JSON(http.StatusBadRequest, errors)
+			return
+		}
 		a.AddEndpoint(endpoint)
 		SaveEndpoint(endpoint)
 
 		c.JSON(http.StatusCreated, gin.H{
-			"Message": "Endpoint Created Successfully",
-			"Path":    path,
+			"message": "Endpoint Created Successfully",
+			"path":    path,
 		})
 	})
 }
