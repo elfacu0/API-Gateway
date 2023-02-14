@@ -254,7 +254,7 @@ func (a *Apy) EnableDelEndpoints() {
 	id := utils.ID(path, http.MethodDelete)
 	a.Endpoints[id] = &Endpoint{Name: "Delete Endpoint", Path: path, Method: http.MethodDelete}
 
-	a.App.DELETE("/delete/:method", func(c *gin.Context) {
+	a.App.DELETE("/delete/:path", func(c *gin.Context) {
 		path := c.Param("path")
 		method := c.Request.Method
 		if err := a.DeleteEndpoint(path, method); err != nil {
