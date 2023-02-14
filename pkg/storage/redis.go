@@ -14,7 +14,7 @@ var _ = godotenv.Load()
 var ctx = context.Background()
 
 var rdb = redis.NewClient(&redis.Options{
-	Addr:     os.Getenv("DB_HOST") + os.Getenv("DB_PORT"),
+	Addr:     os.Getenv("DB_HOST") + ":" + os.Getenv("DB_PORT"),
 	Username: os.Getenv("DB_USER"),
 	Password: os.Getenv("DB_PASSWORD"),
 	DB:       0, // use default DB
