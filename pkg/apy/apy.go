@@ -60,8 +60,21 @@ func HandleRateLimit(endpoint *Endpoint) ResError {
 	return ResError{}
 }
 
-func HandleAuth(endpoint *Endpoint, token string) ResError {
+func HandleAuth(endpoint *Endpoint, c *gin.Context) ResError {
 	if endpoint.EnableAuth {
+		token := c.Request.Header.Get("Authorization")
+
+		if token == "" {
+			return ResError{Status: http.StatusUnauthorized, Message: "Bearer Token cannot be empty"}
+		}
+
+		bearerToken := strings.Split(token, " ")
+		if len(bearerToken) != 2 {
+			return ResError{Status: http.StatusBadRequest, Message: "Bearer Token Is Invalid"}
+		}
+
+		token = bearerToken[1]
+
 		err := auth.ValidJwtToken(token)
 		return ResError{Status: http.StatusUnauthorized, Message: err.Error()}
 	}
@@ -90,8 +103,7 @@ func MiddleWare(endpoints map[string]*Endpoint) gin.HandlerFunc {
 			return
 		}
 
-		token := strings.Split(c.Request.Header.Get("Authorization"), " ")[1]
-		if err := HandleAuth(endpoint, token); err.Status != 0 {
+		if err := HandleAuth(endpoint, c); err.Status != 0 {
 			c.JSON(err.Status, gin.H{
 				"error": err.Message,
 			})
@@ -221,6 +233,7 @@ func (a *Apy) EnableAuthEndpoint() {
 	path := "/auth"
 	id := utils.ID(path, http.MethodGet)
 	a.Endpoints[id] = &Endpoint{Name: "Auth", Path: path, Method: http.MethodGet}
+
 	a.App.GET(path, func(c *gin.Context) {
 		token, err := auth.CreateJwtToken()
 		if err != nil {
@@ -236,7 +249,11 @@ func (a *Apy) Run() {
 }
 
 func (a *Apy) EnableMetrics() {
-	a.App.GET("/metrics", func(c *gin.Context) {
+	path := "/metrics"
+	id := utils.ID(path, http.MethodGet)
+	a.Endpoints[id] = &Endpoint{Name: "Metrics", Path: path, Method: http.MethodGet}
+
+	a.App.GET(path, func(c *gin.Context) {
 		metrics := make(map[string]Metric)
 		for _, endpoint := range a.Endpoints {
 			metrics[endpoint.Name] = Metric{Url: endpoint.Url, Path: endpoint.Path, Method: endpoint.Method, Requests: endpoint.TotalRequests}
@@ -246,7 +263,11 @@ func (a *Apy) EnableMetrics() {
 }
 
 func (a *Apy) EnableNewEndpoints() {
-	a.App.POST("/add", func(c *gin.Context) {
+	path := "/add"
+	id := utils.ID(path, http.MethodGet)
+	a.Endpoints[id] = &Endpoint{Name: "Add Endpoint", Path: path, Method: http.MethodPost}
+
+	a.App.POST(path, func(c *gin.Context) {
 		name := c.PostForm("name")
 		url := c.PostForm("url")
 		method := c.PostForm("method")
