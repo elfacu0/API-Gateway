@@ -217,14 +217,21 @@ func (e *Endpoint) IncReqCounter() {
 	SaveEndpoint(*e)
 }
 
-func (a *Apy) Run() {
-	a.App.GET("/auth", func(c *gin.Context) {
+func (a *Apy) EnableAuthEndpoint() {
+	path := "/auth"
+	id := utils.ID(path, http.MethodGet)
+	a.Endpoints[id] = &Endpoint{Name: "Auth", Path: path, Method: http.MethodGet}
+	a.App.GET(path, func(c *gin.Context) {
 		token, err := auth.CreateJwtToken()
 		if err != nil {
 			return
 		}
 		c.JSON(200, token)
 	})
+}
+
+func (a *Apy) Run() {
+	a.EnableAuthEndpoint()
 	a.App.Run()
 }
 
