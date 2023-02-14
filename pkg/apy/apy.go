@@ -286,7 +286,7 @@ func (a *Apy) EnableNewEndpoints() {
 	})
 }
 
-func (a *Apy) Init(path string) {
+func (a *Apy) Init() {
 	a.App = gin.Default()
 	a.Endpoints = make(map[string]*Endpoint)
 	a.App.Use(MiddleWare(a.Endpoints))
