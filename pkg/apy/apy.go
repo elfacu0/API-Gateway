@@ -271,27 +271,26 @@ func (a *Apy) EnableMetrics() {
 func ParseForm(c *gin.Context) (Endpoint, FormErrors) {
 	name := c.PostForm("name")
 	errors := FormErrors{}
+	url := c.PostForm("url")
+	method := c.PostForm("method")
+	rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
+	enableCache := c.PostForm("enable-cache") != ""
+	enableAuth := c.PostForm("enable-auth") != ""
+	path := "/" + utils.RandomStr()
 
 	if name == "" {
 		errors.Name = "Name cannot be empty."
 	}
-
-	url := c.PostForm("url")
-
 	if url == "" {
 		errors.Url = "Url cannot be empty."
 	}
-	method := c.PostForm("method")
 	if method == "" {
 		errors.Method = "Method cannot be empty. "
 	}
 	if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete {
 		errors.Method += "Method not allowed. "
 	}
-	rateLimit, _ := strconv.Atoi(c.PostForm("rate-limit"))
-	enableCache := c.PostForm("enable-cache") != ""
-	enableAuth := c.PostForm("enable-auth") != ""
-	path := "/" + utils.RandomStr()
+
 	return Endpoint{Name: name, Path: path, Url: url, Method: method, RateLimit: rateLimit, EnableCache: enableCache, EnableAuth: enableAuth}, errors
 }
 
